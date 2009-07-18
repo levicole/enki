@@ -5,7 +5,7 @@ describe Admin::CommentsController do
     before(:each) do
       @posts = [mock_model(Comment), mock_model(Comment)]
       Comment.stub!(:paginate).and_return(@comments)
-      session[:logged_in] = true
+      login_as("quentin")
       get :index
     end
 
@@ -18,7 +18,7 @@ describe Admin::CommentsController do
     before(:each) do
       @comment = Comment.new
       Comment.stub!(:find).and_return(@comment)
-      session[:logged_in] = true
+      login_as("quentin")
       get :show, :id => 1
     end
 
@@ -37,7 +37,7 @@ describe Admin::CommentsController do
     end
 
     def do_put
-      session[:logged_in] = true
+      login_as("quentin")
       put :update, :id => 1, :comment => @attributes 
     end
 
@@ -68,7 +68,7 @@ describe Admin::CommentsController do
     end
 
     def do_put
-      session[:logged_in] = true
+      login_as("quentin")
       put :update, :id => 1, :comment => @attributes 
     end
 
@@ -91,7 +91,7 @@ describe Admin::CommentsController do
     end
 
     def do_delete
-      session[:logged_in] = true
+      login_as("quentin")
       delete :destroy, :id => 1
     end
 
@@ -115,7 +115,7 @@ describe Admin::CommentsController do
     end
 
     def do_delete
-      session[:logged_in] = true
+      login_as("quentin")
       delete :destroy, :id => 1, :format => 'json'
     end
 

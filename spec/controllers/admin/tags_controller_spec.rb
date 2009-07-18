@@ -7,7 +7,7 @@ describe Admin::TagsController do
     before(:each) do
       @tags = [mock_model(Tag), mock_model(Tag)]
       Tag.stub!(:paginate).and_return(@tags)
-      session[:logged_in] = true
+      login_as("quentin")
       get :index
     end
 

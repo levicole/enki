@@ -1,7 +1,9 @@
 ActionController::Routing::Routes.draw do |map|
+
   map.namespace :admin do |admin|
     admin.resource :session
-
+    
+    admin.resources :users
     admin.resource :dashboard, :controller => 'dashboard'
 
     admin.resources :posts, :new => {:preview => :post}
@@ -28,4 +30,7 @@ ActionController::Routing::Routes.draw do |map|
   map.connect ':year/:month/:day/:slug', :controller => 'posts', :action => 'show', :requirements => { :year => /\d+/ }
   map.posts_with_tag ':tag', :controller => 'posts', :action => 'index'
   map.formatted_posts_with_tag ':tag.:format', :controller => 'posts', :action => 'index'
+  
+  map.login "/login", :controller => "admin/sessions", :action => "new"
+  
 end

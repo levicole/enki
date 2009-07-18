@@ -1,47 +1,43 @@
+# This controller handles the login/logout function of the site.  
 class Admin::SessionsController < ApplicationController
-  layout 'login'
+  # Be sure to include AuthenticationSystem in Application Controller instead
+  include AuthenticatedSystem
 
-  def show
-    if using_open_id?
-      create
-    else
-      redirect_to :action => 'new'
-    end
-  end
-
+  # render new.rhtml
   def new
   end
 
   def create
-    return successful_login if allow_login_bypass? && params[:bypass_login]
-    authenticate_with_open_id(params[:openid_url]) do |result, identity_url|
-      if result.successful?
-        if config.author_open_ids.include?(URI.parse(identity_url))
-          return successful_login
-        else
-          flash.now[:error] = "You are not authorized"
-        end
-      else
-        flash.now[:error] = result.message
-      end
+    logout_keeping_session!
+    user = User.authenticate(params[:login], params[:password])
+    if user
+      # Protects against session fixation attacks, causes request forgery
+      # protection if user resubmits an earlier form using back
+      # button. Uncomment if you understand the tradeoffs.
+      # reset_session
+      self.current_user = user
+      new_cookie_flag = (params[:remember_me] == "1")
+      handle_remember_cookie! new_cookie_flag
+      redirect_back_or_default('/')
+      flash[:notice] = "Logged in successfully"
+    else
+      note_failed_signin
+      @login       = params[:login]
+      @remember_me = params[:remember_me]
       render :action => 'new'
     end
   end
 
   def destroy
-    session[:logged_in] = false
-    redirect_to('/')
+    logout_killing_session!
+    flash[:notice] = "You have been logged out."
+    redirect_back_or_default('/')
   end
 
 protected
-
-  def successful_login
-    session[:logged_in] = true
-    redirect_to(admin_dashboard_path)
+  # Track failed login attempts
+  def note_failed_signin
+    flash[:error] = "Couldn't log you in as '#{params[:login]}'"
+    logger.warn "Failed login for '#{params[:login]}' from #{request.remote_ip} at #{Time.now.utc}"
   end
-
-  def allow_login_bypass?
-    ["development", "test"].include?(RAILS_ENV)
-  end
-  helper_method :allow_login_bypass?
 end

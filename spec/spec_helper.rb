@@ -25,7 +25,7 @@ Spec::Runner.configure do |config|
   # do so right here. Just uncomment the next line and replace the fixture
   # names with your fixtures.
   #
-  # config.global_fixtures = :table_a, :table_b
+  config.global_fixtures = :users
   #
   # If you declare global fixtures, be aware that they will be declared
   # for all of your examples, even those that don't use them.
@@ -47,7 +47,7 @@ Spec::Runner.configure do |config|
   # 
   # For more information take a look at Spec::Example::Configuration and Spec::Runner
 end
-
+include AuthenticatedTestHelper
 describe "ATOM feed", :shared => true do
   it "renders with no layout" do 
     response.layout.should be_nil 

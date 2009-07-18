@@ -1,150 +1,135 @@
 require File.dirname(__FILE__) + '/../../spec_helper'
 
+# Be sure to include AuthenticatedTestHelper in spec/spec_helper.rb instead
+# Then, you can remove it from this and the units test.
+include AuthenticatedTestHelper
+
 describe Admin::SessionsController do
-  describe 'handling GET to show (default)' do
-    it 'redirects to new' do
-      get :show
-      response.should be_redirect
-      response.should redirect_to(new_admin_session_path)
+  fixtures        :users
+  before do 
+    @user  = mock_user
+    @login_params = { :login => 'quentin', :password => 'test' }
+    User.stub!(:authenticate).with(@login_params[:login], @login_params[:password]).and_return(@user)
+  end
+  def do_create
+    post :create, @login_params
+  end
+  describe "on successful login," do
+    [ [:nil,       nil,            nil],
+      [:expired,   'valid_token',  15.minutes.ago],
+      [:different, 'i_haxxor_joo', 15.minutes.from_now], 
+      [:valid,     'valid_token',  15.minutes.from_now]
+        ].each do |has_request_token, token_value, token_expiry|
+      [ true, false ].each do |want_remember_me|
+        describe "my request cookie token is #{has_request_token.to_s}," do
+          describe "and ask #{want_remember_me ? 'to' : 'not to'} be remembered" do 
+            before do
+              @ccookies = mock('cookies')
+              controller.stub!(:cookies).and_return(@ccookies)
+              @ccookies.stub!(:[]).with(:auth_token).and_return(token_value)
+              @ccookies.stub!(:delete).with(:auth_token)
+              @ccookies.stub!(:[]=)
+              @user.stub!(:remember_me) 
+              @user.stub!(:refresh_token) 
+              @user.stub!(:forget_me)
+              @user.stub!(:remember_token).and_return(token_value) 
+              @user.stub!(:remember_token_expires_at).and_return(token_expiry)
+              @user.stub!(:remember_token?).and_return(has_request_token == :valid)
+              if want_remember_me
+                @login_params[:remember_me] = '1'
+              else 
+                @login_params[:remember_me] = '0'
+              end
+            end
+            it "kills existing login"        do controller.should_receive(:logout_keeping_session!); do_create; end    
+            it "authorizes me"               do do_create; controller.send(:authorized?).should be_true;   end    
+            it "logs me in"                  do do_create; controller.send(:logged_in?).should  be_true  end    
+            it "greets me nicely"            do do_create; response.flash[:notice].should =~ /success/i   end
+            it "sets/resets/expires cookie"  do controller.should_receive(:handle_remember_cookie!).with(want_remember_me); do_create end
+            it "sends a cookie"              do controller.should_receive(:send_remember_cookie!);  do_create end
+            it 'redirects to the home page'  do do_create; response.should redirect_to('/')   end
+            it "does not reset my session"   do controller.should_not_receive(:reset_session).and_return nil; do_create end # change if you uncomment the reset_session path
+            if (has_request_token == :valid)
+              it 'does not make new token'   do @user.should_not_receive(:remember_me);   do_create end
+              it 'does refresh token'        do @user.should_receive(:refresh_token);     do_create end 
+              it "sets an auth cookie"       do do_create;  end
+            else
+              if want_remember_me
+                it 'makes a new token'       do @user.should_receive(:remember_me);       do_create end 
+                it "does not refresh token"  do @user.should_not_receive(:refresh_token); do_create end
+                it "sets an auth cookie"       do do_create;  end
+              else 
+                it 'does not make new token' do @user.should_not_receive(:remember_me);   do_create end
+                it 'does not refresh token'  do @user.should_not_receive(:refresh_token); do_create end 
+                it 'kills user token'        do @user.should_receive(:forget_me);         do_create end 
+              end
+            end
+          end # inner describe
+        end
+      end
+    end
+  end
+  
+  describe "on failed login" do
+    before do
+      User.should_receive(:authenticate).with(anything(), anything()).and_return(nil)
+      login_as :quentin
+    end
+    it 'logs out keeping session'   do controller.should_receive(:logout_keeping_session!); do_create end
+    it 'flashes an error'           do do_create; flash[:error].should =~ /Couldn't log you in as 'quentin'/ end
+    it 'renders the log in page'    do do_create; response.should render_template('new')  end
+    it "doesn't log me in"          do do_create; controller.send(:logged_in?).should == false end
+    it "doesn't send password back" do 
+      @login_params[:password] = 'FROBNOZZ'
+      do_create
+      response.should_not have_text(/FROBNOZZ/i)
     end
   end
 
-  describe 'handling GET to new' do
+  describe "on signout" do
+    def do_destroy
+      get :destroy
+    end
+    before do 
+      login_as :quentin
+    end
+    it 'logs me out'                   do controller.should_receive(:logout_killing_session!); do_destroy end
+    it 'redirects me to the home page' do do_destroy; response.should be_redirect     end
+  end
+  
+end
+
+describe Admin::SessionsController do
+  describe "route generation" do
+    it "should route the create sessions correctly" do
+      route_for(:controller => 'admin/sessions', :action => 'create').should == {:path => "/admin/session", :method => "post"}
+    end
+  end
+  
+  describe "route recognition" do
+    #not going to worry about a named route for this stuff...
+    # it "should generate params from GET /login correctly" do
+    #   params_from(:get, '/login').should == {:controller => 'admin/sessions', :action => 'new'}
+    # end
+    it "should generate params from POST /admin/session correctly" do
+      params_from(:post, '/admin/session').should == {:controller => 'admin/sessions', :action => 'create'}
+    end
+    # see above
+    # it "should generate params from DELETE /admin/session correctly" do
+    #   params_from(:delete, '/logout').should == {:controller => 'admin/sessions', :action => 'destroy'}
+    # end
+  end
+  
+  describe "named routing" do
     before(:each) do
       get :new
     end
-
-    it "should be successful" do
-      response.should be_success
+    it "should route session_path() correctly" do
+      admin_session_path().should == "/admin/session"
     end
-
-    it "should render index template" do
-      response.should render_template('new')
+    it "should route new_session_path() correctly" do
+      new_admin_session_path().should == "/admin/session/new"
     end
   end
-
-  describe 'handling DELETE to destroy' do
-    before(:each) do
-      delete :destroy
-    end
-
-    it 'logs out the current session' do
-      session[:logged_in].should == false
-    end
-
-    it 'redirects to /' do
-      response.should be_redirect
-      response.should redirect_to('/')
-    end
-  end
-
-  describe '#allow_login_bypass? when RAILS_ENV == production' do
-    it 'returns false' do
-      silence_warnings { RAILS_ENV = 'production' }
-      @controller.send(:allow_login_bypass?).should == false
-    end
-
-    after do
-      silence_warnings { RAILS_ENV = 'test' }
-    end
-  end
-end
-
-describe "logged in and redirected to /admin", :shared => true do
-  it "should set session[:logged_in]" do
-    session[:logged_in].should be_true
-  end
-  it "should redirect to admin posts" do
-    response.should be_redirect
-    response.should redirect_to('/admin/dashboard')
-  end
-end
-describe "not logged in", :shared => true do
-  it "should not set session[:logged_in]" do
-    session[:logged_in].should be_nil
-  end
-  it "should render new" do
-    response.should be_success
-    response.should render_template("new")
-  end
-  it "should set flash.now[:error]" do
-    flash.now[:error].should_not be_nil
-  end
-end
-
-describe Admin::SessionsController, "handling CREATE with post" do
-  before do
-    @controller.instance_eval { flash.extend(DisableFlashSweeping) }
-  end
-
-  def stub_open_id_authenticate(url, status_code, return_value)
-    status = mock("Result", :successful? => status_code == :successful, :message => '')
-    @controller.stub!(:config).and_return(mock("config", :author_open_ids => [
-        "http://enkiblog.com",
-        "http://secondaryopenid.com"
-      ].collect {|uri| URI.parse(uri)}
-    ))
-    @controller.should_receive(:authenticate_with_open_id).with(url).and_yield(status,url).and_return(return_value)
-  end
-  describe "with invalid URL http://evilman.com and OpenID authentication succeeding" do
-    before do
-      stub_open_id_authenticate("http://evilman.com", :successful, false)
-      post :create, :openid_url => "http://evilman.com"
-    end
-    it_should_behave_like "not logged in"
-  end
-  describe "with valid URL http://enkiblog.com and OpenID authentication succeeding" do
-    before do
-      stub_open_id_authenticate("http://enkiblog.com", :successful, false)
-      post :create, :openid_url => "http://enkiblog.com"
-    end
-    it_should_behave_like "logged in and redirected to /admin"
-  end
-  describe "with valid secondary URL http://secondaryopenid.com and OpenID authentication succeeding" do
-    before do
-      stub_open_id_authenticate("http://secondaryopenid.com", :successful, false)
-      post :create, :openid_url => "http://secondaryopenid.com"
-    end
-    it_should_behave_like "logged in and redirected to /admin"
-  end
-  describe "with valid URL http://enkiblog.com and OpenID authentication returning 'failed'" do
-    before do
-      stub_open_id_authenticate("http://enkiblog.com", :failed, true)
-      post :create, :openid_url => "http://enkiblog.com"
-    end
-    it_should_behave_like "not logged in"
-  end
-  describe "with valid URL http://enkiblog.com and OpenID authentication returning 'missing'" do
-    before do
-      stub_open_id_authenticate("http://enkiblog.com", :missing, true)
-      post :create, :openid_url => "http://enkiblog.com"
-    end
-    it_should_behave_like "not logged in"
-  end
-  describe "with valid URL http://enkiblog.com and OpenID authentication returning 'canceled'" do
-    before do
-      stub_open_id_authenticate("http://enkiblog.com", :canceled, true)
-      post :create, :openid_url => "http://enkiblog.com"
-    end
-    it_should_behave_like "not logged in"
-  end
-  describe "with no URL" do
-    before do
-      post :create, :openid_url => ""
-    end
-    it_should_behave_like "not logged in"
-  end
-  describe "with bypass login selected" do
-    before do
-      post :create, :openid_url => "", :bypass_login => "1"
-    end
-    it_should_behave_like "logged in and redirected to /admin"
-  end
-  describe "with bypass login selected but login bypassing disabled" do
-    before do
-      @controller.stub!(:allow_login_bypass?).and_return(false)
-      post :create, :openid_url => "", :bypass_login => "1"
-    end
-    it_should_behave_like "not logged in"
-  end
+  
 end

@@ -10,7 +10,7 @@ describe Admin::DashboardController do
 
       CommentActivity.stub!(:find_recent).and_return(@comment_activity)
 
-      session[:logged_in] = true
+      login_as("quentin")
       get :show
     end
 

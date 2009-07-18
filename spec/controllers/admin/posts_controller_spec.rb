@@ -5,7 +5,7 @@ describe Admin::PostsController do
     before(:each) do
       @posts = [mock_model(Post), mock_model(Post)]
       Post.stub!(:paginate).and_return(@posts)
-      session[:logged_in] = true
+      login_as("quentin")
       get :index
     end
 
@@ -26,7 +26,7 @@ describe Admin::PostsController do
     before(:each) do
       @post = mock_model(Post)
       Post.stub!(:find).and_return(@post)
-      session[:logged_in] = true
+      login_as("quentin")
       get :show, :id => 1
     end
 
@@ -47,7 +47,7 @@ describe Admin::PostsController do
     before(:each) do
       @post = mock_model(Post)
       Post.stub!(:new).and_return(@post)
-      session[:logged_in] = true
+      login_as("quentin")
       get :new
     end
 
@@ -63,7 +63,7 @@ describe Admin::PostsController do
     end
 
     def do_put
-      session[:logged_in] = true
+      login_as("quentin")
       put :update, :id => 1, :post => valid_post_attributes      
     end
 
@@ -90,7 +90,7 @@ describe Admin::PostsController do
     end
 
     def do_put
-      session[:logged_in] = true
+      login_as("quentin")
       put :update, :id => 1, :post => {}
     end
 
@@ -107,7 +107,7 @@ describe Admin::PostsController do
 
   describe 'handling POST to create with valid attributes' do
     it 'creates a post' do
-      session[:logged_in] = true
+      login_as("quentin")
       lambda { post :create, :post => valid_post_attributes }.should change(Post, :count).by(1)
     end
   end
@@ -128,7 +128,7 @@ describe Admin::PostsController do
     end
 
     def do_delete
-      session[:logged_in] = true
+      login_as("quentin")
       delete :destroy, :id => 1
     end
 
@@ -152,7 +152,7 @@ describe Admin::PostsController do
     end
 
     def do_delete
-      session[:logged_in] = true
+      login_as("quentin")
       delete :destroy, :id => 1, :format => 'json'
     end
 
@@ -172,7 +172,7 @@ describe Admin::PostsController, 'with an AJAX request to preview' do
   before(:each) do
     Post.should_receive(:build_for_preview).and_return(@post = mock_model(Post))
     controller.should_receive(:render).with(:partial => 'posts/post.html.erb')
-    session[:logged_in] = true
+    login_as("quentin")
     xhr :post, :preview, :post => {
       :title        => 'My Post',
       :body         => 'body',
